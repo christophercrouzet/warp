@@ -2,6 +2,17 @@
 # SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
+"""Maintain the docs version manifest in gh-pages.
+
+This script updates the `versions.json` file that powers the docs landing page
+and the version dropdown. It is designed to run in CI after a versioned docs
+build is copied into `gh-pages` (e.g., `/v1.12/`, `/dev/`). It:
+
+- Keeps `versions.json` in sync with the folders that actually exist.
+- Adds the newly published version to the manifest.
+- Computes which version should be treated as "latest" for redirects.
+"""
+
 import argparse
 import json
 import os
@@ -9,13 +20,21 @@ import re
 from typing import Dict, List
 
 VERSION_DIR_RE = re.compile(r"^v\d+\.\d+(\.\d+)?")
+RELEASE_BRANCH_RE = re.compile(r"^v\d+\.\d+$")
 
 
 def ensure_trailing_slash(path: str) -> str:
+    """Normalize version paths so they always end with a slash."""
     return path if path.endswith("/") else f"{path}/"
 
 
 def version_sort_key(version: str) -> tuple:
+    """Sort versions in descending semantic order.
+
+    The key is used to order the dropdown and choose the latest fallback:
+    major/minor/patch are compared numerically, with shorter `vMAJOR.MINOR`
+    aliases placed ahead of patch releases for the same minor line.
+    """
     cleaned = version.lstrip("v")
     match = re.match(r"^(\d+)(?:\.(\d+))?(?:\.(\d+))?(.*)$", cleaned)
     if not match:
@@ -23,13 +42,15 @@ def version_sort_key(version: str) -> tuple:
 
     major = int(match.group(1) or 0)
     minor = int(match.group(2) or 0)
-    patch = int(match.group(3) or 0)
+    patch_group = match.group(3)
+    patch = int(patch_group) if patch_group is not None else 999999
     suffix = match.group(4) or ""
     is_release = 1 if suffix == "" else 0
     return (major, minor, patch, is_release, suffix)
 
 
 def load_versions(output_path: str) -> Dict[str, dict]:
+    """Load the existing versions manifest if present."""
     if not os.path.exists(output_path):
         return {}
 
@@ -51,6 +72,7 @@ def load_versions(output_path: str) -> Dict[str, dict]:
 
 
 def discover_versions(root_dir: str, entries: Dict[str, dict]) -> None:
+    """Scan gh-pages for version folders that are missing from the manifest."""
     if not os.path.isdir(root_dir):
         return
 
@@ -66,8 +88,21 @@ def discover_versions(root_dir: str, entries: Dict[str, dict]) -> None:
 
 
 def write_versions(output_path: str, versions: List[dict]) -> None:
+    """Write the versions manifest, preferring release branches as latest."""
+    latest = None
+    for entry in versions:
+        if RELEASE_BRANCH_RE.match(entry["version"]):
+            latest = entry["version"]
+            break
+
+    if latest is None:
+        for entry in versions:
+            if entry["version"].startswith("v"):
+                latest = entry["version"]
+                break
+
     payload = {
-        "latest": versions[0]["version"] if versions else None,
+        "latest": latest if latest is not None else (versions[0]["version"] if versions else None),
         "versions": versions,
     }
 
@@ -77,6 +112,7 @@ def write_versions(output_path: str, versions: List[dict]) -> None:
 
 
 def main() -> None:
+    """Update the versions manifest after publishing a new docs version."""
     parser = argparse.ArgumentParser(description="Update versions.json for docs publishing.")
     parser.add_argument("--version", required=True, help="Version tag to publish (e.g. v1.2.3).")
     parser.add_argument("--output", default="versions.json", help="Path to versions.json in gh-pages.")

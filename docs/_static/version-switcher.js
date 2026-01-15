@@ -2,13 +2,17 @@
   "use strict";
 
   const VERSION_PREFIX_RE = /^v\d+\.\d+/;
+  const SPECIAL_VERSIONS = new Set(["dev", "main", "latest"]);
 
   const isVersionSegment = (segment) =>
-    segment === "dev" || segment === "main" || VERSION_PREFIX_RE.test(segment);
+    SPECIAL_VERSIONS.has(segment) || VERSION_PREFIX_RE.test(segment);
 
   const normalizeVersion = (value) => {
     if (!value) {
       return null;
+    }
+    if (SPECIAL_VERSIONS.has(value)) {
+      return value;
     }
     return value.startsWith("v") ? value : `v${value}`;
   };

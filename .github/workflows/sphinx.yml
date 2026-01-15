@@ -20,6 +20,9 @@ on:
   push:
     tags:
       - v*
+    branches:
+      - release-*
+      - main
   workflow_dispatch:
 
 jobs:
@@ -51,9 +54,32 @@ jobs:
           path: docs/_build/html/
       - name: Deploy to gh-pages
         env:
-          DOCS_VERSION: ${{ github.ref_name }}
+          GITHUB_REF_TYPE: ${{ github.ref_type }}
+          GITHUB_REF_NAME: ${{ github.ref_name }}
         run: |
           set -euo pipefail
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            DOCS_VERSION="${GITHUB_REF_NAME}"
+          elif [[ "${GITHUB_REF_TYPE}" == "branch" ]]; then
+            if [[ "${GITHUB_REF_NAME}" == "main" ]]; then
+              DOCS_VERSION="dev"
+            elif [[ "${GITHUB_REF_NAME}" =~ ^release- ]]; then
+              raw_version="${GITHUB_REF_NAME#release-}"
+              if [[ "${raw_version}" =~ ^v?([0-9]+)\.([0-9]+) ]]; then
+                DOCS_VERSION="v${BASH_REMATCH[1]}.${BASH_REMATCH[2]}"
+              else
+                echo "Unsupported release branch name: ${GITHUB_REF_NAME}" >&2
+                exit 1
+              fi
+            else
+              echo "Unsupported branch ref: ${GITHUB_REF_NAME}" >&2
+              exit 1
+            fi
+          else
+            echo "Unsupported ref type: ${GITHUB_REF_TYPE}" >&2
+            exit 1
+          fi
+
           git config --global user.email "actions@github.com"
           git config --global user.name "GitHub Actions"
 
@@ -78,7 +104,28 @@ jobs:
           cp .docs-deploy/docs-landing.html index.html
           python .docs-deploy/update_docs_versions.py --version "${DOCS_VERSION}" --output versions.json
 
+          LATEST_VERSION="$(python - <<'PY'
+import json
+
+try:
+    with open("versions.json", "r", encoding="utf-8") as handle:
+        data = json.load(handle)
+except Exception:
+    print("")
+else:
+    print(data.get("latest") or "")
+PY
+)"
+          if [[ -n "${LATEST_VERSION}" && -d "${LATEST_VERSION}" ]]; then
+            rm -rf latest
+            mkdir -p latest
+            cp -a "${LATEST_VERSION}/." latest/
+          fi
+
           git add "${DOCS_VERSION}" versions.json index.html .nojekyll
+          if [[ -d latest ]]; then
+            git add latest
+          fi
           if git diff --cached --quiet; then
             echo "No documentation changes to publish."
           else
