@@ -1,0 +1,36 @@
+.warp-version-switcher {
+    align-items: center;
+    display: flex;
+    gap: 0.35rem;
+    margin-left: 0.5rem;
+    white-space: nowrap;
+}
+
+.warp-version-label {
+    color: var(--pst-color-text-muted, inherit);
+    font-size: 0.85rem;
+}
+
+.warp-version-select {
+    background-color: var(--pst-color-surface, #ffffff);
+    border: 1px solid var(--pst-color-border, #d0d0d0);
+    border-radius: 0.35rem;
+    color: inherit;
+    font-size: 0.85rem;
+    padding: 0.1rem 0.45rem;
+}
+
+.warp-version-select:focus {
+    outline: 2px solid var(--pst-color-primary, #0d6efd);
+    outline-offset: 2px;
+}
+
+@media (max-width: 992px) {
+    .warp-version-switcher {
+        margin-left: 0.25rem;
+    }
+
+    .warp-version-label {
+        display: none;
+    }
+}

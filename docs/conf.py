@@ -145,7 +145,8 @@ html_context = {
     "github_version": GITHUB_VERSION,
     "doc_path": "docs",
 }
-html_css_files = ["custom.css"]
+html_css_files = ["custom.css", "version-switcher.css"]
+html_js_files = ["version-switcher.js"]
 html_static_path = ["_static"]
 html_show_sphinx = False
 

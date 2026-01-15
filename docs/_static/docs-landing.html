@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Warp Documentation</title>
+    <style>
+      body {
+        font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+        line-height: 1.5;
+        margin: 0;
+        color: #1b1b1b;
+        background: #ffffff;
+      }
+      main {
+        max-width: 720px;
+        margin: 4rem auto;
+        padding: 0 1.5rem 2rem;
+      }
+      h1 {
+        margin-bottom: 0.5rem;
+      }
+      h2 {
+        margin-top: 2rem;
+      }
+      a {
+        color: #0a58ca;
+      }
+      .status {
+        margin: 1rem 0 1.5rem;
+        color: #444;
+      }
+      .latest-link {
+        font-weight: 600;
+      }
+      ul {
+        padding-left: 1.2rem;
+      }
+      li {
+        margin: 0.35rem 0;
+      }
+      .note {
+        color: #666;
+        font-size: 0.95rem;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Warp Documentation</h1>
+      <p class="status" id="status">Loading documentation versions...</p>
+      <p><a class="latest-link" id="latest-link" href="#">Go to latest docs</a></p>
+      <h2>All versions</h2>
+      <ul id="versions-list"></ul>
+      <p class="note">Add <code>?stay=1</code> to remain on this page.</p>
+    </main>
+    <script>
+      (() => {
+        const status = document.getElementById("status");
+        const latestLink = document.getElementById("latest-link");
+        const versionsList = document.getElementById("versions-list");
+        const basePath = window.location.pathname.replace(/[^/]*$/, "");
+        const versionsUrl = `${basePath}versions.json`;
+        const params = new URLSearchParams(window.location.search);
+        const allowRedirect = !params.has("stay");
+
+        const updateStatus = (message) => {
+          status.textContent = message;
+        };
+
+        fetch(versionsUrl)
+          .then((response) => (response.ok ? response.json() : null))
+          .then((data) => {
+            if (!data || !Array.isArray(data.versions) || data.versions.length === 0) {
+              updateStatus("No published documentation versions yet.");
+              latestLink.style.display = "none";
+              return;
+            }
+
+            const latestVersion = data.latest || data.versions[0].version;
+            versionsList.innerHTML = "";
+
+            data.versions.forEach((entry) => {
+              if (!entry || !entry.version) {
+                return;
+              }
+              const path = entry.path || entry.url || `${entry.version}/`;
+              const link = document.createElement("a");
+              link.href = `${basePath}${path}`;
+              link.textContent =
+                entry.version + (latestVersion && entry.version === latestVersion ? " (latest)" : "");
+              const item = document.createElement("li");
+              item.appendChild(link);
+              versionsList.appendChild(item);
+            });
+
+            const latestEntry =
+              data.versions.find((entry) => entry.version === latestVersion) || data.versions[0];
+            if (!latestEntry) {
+              updateStatus("Select a documentation version.");
+              latestLink.style.display = "none";
+              return;
+            }
+
+            const latestPath = latestEntry.path || latestEntry.url || `${latestEntry.version}/`;
+            latestLink.href = `${basePath}${latestPath}`;
+            latestLink.textContent = `Go to latest docs (${latestEntry.version})`;
+
+            if (allowRedirect) {
+              updateStatus("Redirecting to the latest docs...");
+              setTimeout(() => {
+                window.location.replace(latestLink.href);
+              }, 800);
+            } else {
+              updateStatus("Select a documentation version.");
+            }
+          })
+          .catch(() => {
+            updateStatus("Unable to load documentation versions.");
+            latestLink.style.display = "none";
+          });
+      })();
+    </script>
+  </body>
+</html>

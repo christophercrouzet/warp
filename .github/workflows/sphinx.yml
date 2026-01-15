@@ -50,15 +50,38 @@ jobs:
           name: html-docs
           path: docs/_build/html/
       - name: Deploy to gh-pages
+        env:
+          DOCS_VERSION: ${{ github.ref_name }}
         run: |
+          set -euo pipefail
           git config --global user.email "actions@github.com"
           git config --global user.name "GitHub Actions"
-          git checkout --orphan gh-pages
-          git rm -rf .
-          mv docs/_build/html/* .
-          mv docs/_build/html/.nojekyll .
-          mv docs/_build/html/.buildinfo .
-          rm -rf docs warp _build __pycache__
-          git add . .nojekyll .buildinfo
-          git commit -m "Deploy Sphinx documentation"
-          git push -f origin gh-pages
+
+          mkdir -p .docs-deploy
+          cp tools/ci/update_docs_versions.py .docs-deploy/update_docs_versions.py
+          cp docs/_static/docs-landing.html .docs-deploy/docs-landing.html
+
+          git fetch origin gh-pages || true
+          if git show-ref --quiet refs/remotes/origin/gh-pages; then
+            git checkout gh-pages
+            git reset --hard origin/gh-pages
+          else
+            git checkout --orphan gh-pages
+            git rm -rf .
+          fi
+
+          rm -rf "${DOCS_VERSION}"
+          mkdir -p "${DOCS_VERSION}"
+          cp -a docs/_build/html/. "${DOCS_VERSION}/"
+
+          touch .nojekyll
+          cp .docs-deploy/docs-landing.html index.html
+          python .docs-deploy/update_docs_versions.py --version "${DOCS_VERSION}" --output versions.json
+
+          git add "${DOCS_VERSION}" versions.json index.html .nojekyll
+          if git diff --cached --quiet; then
+            echo "No documentation changes to publish."
+          else
+            git commit -m "Deploy docs for ${DOCS_VERSION}"
+            git push origin gh-pages
+          fi
